@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Тетра Транс – интерактивный модуль контейнерного парка</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <style>
+    :root{
+      --bg:#eef5fb;
+      --ink:#102033;
+      --muted:#61758b;
+      --panel:#ffffff;
+      --panel2:#f6f9fd;
+      --line:#d7e3ef;
+      --blue:#2589ff;
+      --cyan:#20c7e8;
+      --green:#26c281;
+      --yellow:#f5bd2e;
+      --orange:#f47b20;
+      --red:#ef4d5f;
+      --violet:#7164f2;
+      --shadow:0 18px 50px rgba(31,55,85,.13);
+      --radius:28px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--ink);background:linear-gradient(180deg,#f4f8fc 0%,#e9f1f9 100%);overflow-x:hidden}
+    .app{max-width:1740px;margin:0 auto;padding:28px 30px 46px}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;margin-bottom:24px}
+    h1{font-size:36px;line-height:1.08;margin:0 0 8px;font-weight:950;letter-spacing:-.04em}
+    .subtitle{font-size:18px;color:var(--muted);line-height:1.45;max-width:850px;margin:0}
+    .tabs{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+    button,select{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:18px;padding:13px 18px;font-weight:850;font-size:15px;cursor:pointer;transition:.18s transform,.18s box-shadow,.18s border-color,.18s background;outline:none}
+    button:hover,select:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(37,137,255,.12);border-color:#9dc9ff}
+    button.primary{border:0;background:linear-gradient(135deg,var(--blue),var(--violet));color:#fff;box-shadow:0 14px 36px rgba(37,137,255,.25)}
+    button.active{border-color:#9dc9ff;background:#eef7ff;color:#155ea8}
+    .page{display:none;animation:fade .26s ease both}.page.active{display:block}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+    .topActions{display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+    .dbStatus{display:inline-flex;align-items:center;gap:7px;background:transparent;border:0;border-radius:0;padding:0;color:#19835b;font-weight:900;font-size:13px;box-shadow:none;letter-spacing:-.01em}
+    .dbStatus i{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(38,194,129,.12)}
+    .dashboardGrid{display:grid;grid-template-columns:1.25fr 1fr 1fr 1.12fr 1fr;gap:16px;margin-bottom:20px}
+    .dashCard{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:19px 20px;box-shadow:var(--shadow);min-height:178px}
+    .dashCard:after{content:"";position:absolute;right:-28px;bottom:-32px;width:108px;height:108px;border-radius:50%;background:#e8f3ff;z-index:0}
+    .dashCard>*{position:relative;z-index:1}
+    .dashHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+    .dashHead small{display:block;color:#5a7088;font-size:14px;font-weight:950;line-height:1.25}
+    .dashHead b{display:block;font-size:30px;line-height:1;color:var(--blue);letter-spacing:-.04em;white-space:nowrap}
+    .dashHead b.good{color:var(--green)}.dashHead b.warn{color:#f2b722}.dashHead b.bad{color:var(--red)}
+    .dashSub{color:var(--muted);font-size:13px;line-height:1.32;margin-top:-2px;margin-bottom:10px}
+    .tinyLegend{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:#61758b;font-size:12px;font-weight:800}
+    .tinyLegend span{display:inline-flex;align-items:center;gap:6px}.tinyLegend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+    .fleetChart{height:94px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:end;margin-top:6px}
+    .fleetCol{display:grid;gap:5px;justify-items:center;align-items:end;min-width:0}
+    .fleetBarBox{height:64px;display:flex;align-items:flex-end;justify-content:center;width:100%}
+    .fleetBar{width:28px;min-height:10px;border-radius:10px 10px 4px 4px;overflow:hidden;background:#e8f0f7;display:flex;flex-direction:column-reverse;box-shadow:inset 0 0 0 1px rgba(255,255,255,.75)}
+    .fleetBar i{display:block;width:100%}
+    .stack20{background:linear-gradient(180deg,#53c9ff,#2589ff)}.stack40{background:linear-gradient(180deg,#55dfa4,#26c281)}.stackWarn{background:#f5bd2e}.stackBad{background:#ef4d5f}.stackBlue{background:#2589ff}
+    .fleetCol span{font-size:10px;color:#61758b;font-weight:900;white-space:nowrap}.fleetCol b{font-size:12px;color:#102033}
+    .sparkBars{height:88px;display:flex;align-items:end;gap:10px;margin-top:20px}
+    .activeCol{flex:1;display:grid;gap:5px;justify-items:center;align-items:end;min-width:0}
+    .activeBar{width:100%;max-width:34px;min-height:16px;border-radius:11px 11px 4px 4px;background:linear-gradient(180deg,var(--blue),var(--cyan));position:relative;box-shadow:0 8px 16px rgba(37,137,255,.15)}
+    .activeBar.good{background:linear-gradient(180deg,var(--green),var(--cyan))}.activeBar.warn{background:linear-gradient(180deg,var(--yellow),var(--orange))}.activeBar.bad{background:linear-gradient(180deg,#ff8b98,var(--red))}.activeBar.blue{background:linear-gradient(180deg,var(--blue),var(--cyan))}
+    .activeBar span{position:absolute;left:50%;bottom:calc(100% + 5px);transform:translateX(-50%);font-size:11px;color:#52677d;font-weight:900}.activeCol b{font-size:10px;color:#61758b;font-weight:900;white-space:nowrap}
+    .terminalBars{display:grid;gap:8px;margin-top:11px}
+    .terminalRow{display:grid;grid-template-columns:72px 1fr 34px;gap:9px;align-items:center;font-size:12px;color:#52677d;font-weight:850}
+    .terminalRow div{height:10px;border-radius:999px;background:#e8f0f7;overflow:hidden}.terminalRow i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--violet))}
+    .riskGraph{height:94px;display:grid;grid-template-columns:repeat(4,1fr);gap:9px;align-items:end;margin-top:24px}
+    .riskCol{display:grid;gap:5px;justify-items:center;align-items:end;min-width:0}
+    .riskTowerWrap{height:58px;display:flex;align-items:flex-end;justify-content:center;width:100%}
+    .riskTower{width:30px;border-radius:11px 11px 4px 4px;background:linear-gradient(180deg,#ff8f9b,var(--red));box-shadow:0 10px 22px rgba(239,77,95,.18);min-height:10px;position:relative}
+    .riskTower strong{position:absolute;left:50%;bottom:calc(100% + 5px);transform:translateX(-50%);font-size:12px;color:var(--red)}
+    .riskCol span{font-size:10px;color:#61758b;font-weight:900;white-space:nowrap}.riskCol em{font-style:normal;font-size:10px;color:#8a9aab;font-weight:850}
+    .counterBox{margin-top:12px;background:#f5f9fd;border:1px solid var(--line);border-radius:16px;padding:12px}
+    .counterTop{display:flex;justify-content:space-between;align-items:end;gap:8px}
+    .counterTop b{font-size:26px;color:var(--blue);line-height:1}.counterTop span{font-size:12px;color:#61758b;font-weight:850}
+    .counterTrack{height:12px;border-radius:999px;background:#e8f0f7;overflow:hidden;margin-top:10px}
+    .counterTrack i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--green));width:50%}
+
+    .insightGrid{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:18px;margin-bottom:20px}.insight{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px}.insight h2{font-size:22px;margin:0 0 8px;letter-spacing:-.03em}.insight p{margin:0;color:var(--muted);line-height:1.42}.donutBox{display:grid;grid-template-columns:142px 1fr;gap:18px;align-items:center;margin-top:14px}.donutBig{width:138px;height:138px;border-radius:50%;background:conic-gradient(var(--green) 0 68%,var(--yellow) 68% 88%,var(--red) 88% 100%);display:grid;place-items:center}.donutBig span{width:86px;height:86px;border-radius:50%;background:#fff;display:grid;place-items:center;text-align:center;font-weight:950;font-size:26px;line-height:1.05}.legendRows{display:grid;gap:10px}.legendRows div{display:flex;justify-content:space-between;gap:10px;background:#f5f9fd;border:1px solid var(--line);border-radius:14px;padding:10px 12px;color:#506880}.legendRows b{color:#102033}.barRows{display:grid;gap:12px;margin-top:16px}.barRow{display:grid;grid-template-columns:128px 1fr 46px;gap:12px;align-items:center;font-weight:850;color:#52677d}.bar{height:12px;border-radius:999px;background:#e8f0f7;overflow:hidden}.bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--cyan),var(--green));width:50%}.bar i.warn{background:linear-gradient(90deg,var(--yellow),var(--orange))}.bar i.bad{background:linear-gradient(90deg,#ff9ca7,var(--red))}.pointGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:15px}.pointCard{background:#f7fbff;border:1px solid var(--line);border-radius:16px;padding:12px}.pointCard b{display:block;font-size:15px;margin-bottom:7px}.pointCard span{display:flex;align-items:center;gap:8px;color:#61758b;font-size:13px;line-height:1.3}.statusDot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(38,194,129,.12)}.statusDot.warn{background:var(--yellow);box-shadow:0 0 0 4px rgba(245,189,46,.16)}.statusDot.bad{background:var(--red);box-shadow:0 0 0 4px rgba(239,77,95,.14)}
+
+    .situationLayout{display:grid;grid-template-columns:minmax(760px,1.35fr) minmax(350px,.65fr);gap:18px;align-items:start}.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panelInner{padding:22px}.panelTitle{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 22px 0}.panelTitle h2{font-size:26px;letter-spacing:-.04em;margin:0 0 7px}.panelTitle p{margin:0;color:var(--muted);line-height:1.4}.mapToolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:18px 22px 16px}.mapToolbar select{min-width:270px}.grow{flex:1}.mapWrap{position:relative;height:580px;border-top:1px solid var(--line);background:#dce8f1}.mapWrap.compact{height:390px;border:1px solid var(--line);border-radius:24px;overflow:hidden;margin:16px 0}.mapWrap #situationMap,.mapWrap #orderMap{width:100%;height:100%;z-index:1}.mapLegend{position:absolute;left:18px;bottom:18px;z-index:5;display:flex;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;padding:10px 13px;box-shadow:0 12px 30px rgba(31,55,85,.13);font-size:13px;color:#405a74}.mapLegend span{display:flex;align-items:center;gap:7px}.legendDot{width:11px;height:11px;border-radius:50%;display:inline-block}.mapHint{position:absolute;right:0px;bottom:0px;z-index:5;max-width:330px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:18px;padding:12px 14px;color:#4d647a;line-height:1.35;font-size:13px;box-shadow:0 12px 30px rgba(31,55,85,.13)}
+
+    .cityIcon{width:34px;height:34px;border-radius:50%;border:4px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,.2),0 0 0 10px rgba(38,194,129,.12);background:var(--green)}.cityIcon.watch{background:var(--yellow);box-shadow:0 8px 24px rgba(0,0,0,.2),0 0 0 12px rgba(245,189,46,.16)}.cityIcon.bad{background:var(--red);box-shadow:0 8px 24px rgba(0,0,0,.2),0 0 0 13px rgba(239,77,95,.15)}
+    .cityLabel{background:rgba(255,255,255,.94);border:1px solid #d0ddeb;border-radius:15px;padding:7px 10px;font-weight:950;color:#173552;box-shadow:0 8px 22px rgba(31,55,85,.12);white-space:nowrap}.cityLabel.good{color:#0f8a59}.cityLabel.watch{color:#8d6400}.cityLabel.bad{color:#c8243a}.terminalIcon{width:28px;height:28px;border-radius:9px;background:#fff;border:4px solid var(--blue);box-shadow:0 8px 22px rgba(37,137,255,.25);position:relative;transform:rotate(45deg)}.terminalIcon:after{content:"";position:absolute;left:6px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--blue)}.terminalLabel{background:#ffffff;border:1px solid #c7d7e8;color:#173552;border-radius:13px;padding:5px 9px;font-size:12px;font-weight:950;white-space:nowrap;box-shadow:0 8px 22px rgba(31,55,85,.12)}.hoverLabel{background:rgba(255,255,255,.96);border:1px solid #d0ddeb;border-radius:15px;padding:7px 10px;font-weight:950;color:#173552;box-shadow:0 8px 22px rgba(31,55,85,.12);white-space:nowrap}.hoverLabel.good{color:#0f8a59}.hoverLabel.watch{color:#8d6400}.hoverLabel.bad{color:#c8243a}.terminalHoverLabel{background:#ffffff;border:1px solid #c7d7e8;color:#173552;border-radius:13px;padding:5px 9px;font-size:12px;font-weight:950;white-space:nowrap;box-shadow:0 8px 22px rgba(31,55,85,.12)}.leaflet-tooltip.hoverLabel,.leaflet-tooltip.terminalHoverLabel{box-shadow:0 8px 22px rgba(31,55,85,.12)}
+    .trainIcon{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#fff,#e8f4ff);border:2px solid #9dc9ff;box-shadow:0 8px 22px rgba(37,137,255,.35);display:grid;place-items:center;font-size:22px}.trainIcon span{transform:translateY(-1px)}
+    .routeLine{stroke-linecap:round;filter:drop-shadow(0 3px 8px rgba(37,137,255,.25))}.railDash{animation:railMove 8s linear infinite}@keyframes railMove{to{stroke-dashoffset:-80}}
+
+    .infoStack{display:grid;gap:14px;padding:18px}.infoCard{background:var(--panel2);border:1px solid var(--line);border-radius:22px;padding:18px}.infoCard h3{margin:0 0 8px;font-size:22px;letter-spacing:-.02em}.infoCard .muted{color:var(--muted);line-height:1.45}.badge{display:inline-flex;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:900}.badge.good{background:#e7f9f0;color:#138c59}.badge.watch{background:#fff5d7;color:#9c7200}.badge.bad{background:#ffe8eb;color:#bd2437}.badge.blue{background:#e5f2ff;color:#1b6fcf}.miniRows{display:grid;gap:9px;margin-top:14px}.miniRow{display:flex;justify-content:space-between;gap:14px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px 12px;color:#52677d}.miniRow b{color:var(--ink)}.spark{height:8px;background:#e7eef6;border-radius:999px;overflow:hidden;margin-top:8px}.spark i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--green));width:40%}.routeList{display:grid;gap:9px;margin-top:12px}.routeItem{border:1px solid var(--line);background:#fff;border-radius:16px;padding:12px;cursor:pointer;transition:.18s}.routeItem:hover,.routeItem.active{border-color:#8dc5ff;background:#eef7ff}.routeItem b{display:block;margin-bottom:5px}.routeItem span{font-size:13px;color:var(--muted)}.miniCharts{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.donut{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:17px;padding:12px}.donutCircle{width:66px;height:66px;border-radius:50%;background:conic-gradient(var(--blue) var(--p),#e7eef6 0);display:grid;place-items:center;font-weight:950;color:#102033}.donutCircle span{width:45px;height:45px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:13px}.donut b{display:block}.donut small{color:var(--muted);line-height:1.2}
+
+    .orderIntro{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-bottom:18px}.orderPanel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px}.orderPanel h2{margin:0 0 8px;font-size:31px;letter-spacing:-.04em}.orderPanel p{margin:0 0 18px;color:var(--muted);font-size:16px;line-height:1.45}.orderForm{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.field label{display:block;color:#415870;font-size:13px;font-weight:850;margin:0 0 7px}.field select,.field input[type=range]{width:100%}.field select{background:#fff;border-radius:15px;padding:13px 14px}.rangeTop{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#415870;font-weight:850;margin:0 0 7px}.field input[type=range]{accent-color:var(--blue)}.eventBox{border-radius:22px;background:#12243a;color:#fff;padding:18px;min-height:100%;display:flex;flex-direction:column;justify-content:space-between}.eventBox h3{margin:0 0 10px;font-size:22px}.eventLine{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);border-radius:15px;padding:12px;color:#dcecff;line-height:1.35}.eventBox button{align-self:flex-start;margin-top:16px}
+    .calcLayout{display:grid;grid-template-columns:minmax(500px,.72fr) minmax(760px,1.28fr);gap:18px;align-items:start}.scenarioPanel,.analysisPanel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px}.scenarioPanel h2,.analysisPanel h2{margin:0;font-size:26px;letter-spacing:-.03em}.scenarioPanel .lead,.analysisPanel .lead{margin:6px 0 18px;color:var(--muted);line-height:1.45}.scenarioList{display:grid;gap:12px}.scenarioCard{border:1px solid var(--line);background:#fff;border-radius:22px;padding:17px;cursor:pointer;transition:.18s}.scenarioCard:hover,.scenarioCard.active{border-color:#85c2ff;background:#f1f8ff;box-shadow:0 12px 32px rgba(37,137,255,.1);transform:translateY(-1px)}.scenarioHeader{display:grid;grid-template-columns:42px 1fr auto;gap:13px;align-items:center}.rank{width:42px;height:42px;border-radius:15px;background:#e9f2fb;display:grid;place-items:center;font-weight:950;color:#31506d}.scenarioTitle{font-size:20px;line-height:1.12;font-weight:950;letter-spacing:-.02em}.scenarioSub{color:var(--muted);font-size:14px;margin-top:5px;line-height:1.35}.scenarioMetrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.metric{border-radius:999px;padding:7px 10px;font-size:12px;font-weight:900;background:#eff5fb;color:#31506d}.metric.good{background:#e8f9f1;color:#138c59}.metric.watch{background:#fff5d7;color:#946c00}.metric.bad{background:#ffe8eb;color:#bd2437}.metric.blue{background:#e5f2ff;color:#1b6fcf}.decision{white-space:nowrap}.selectedSummary{border:1px solid #b8dcff;background:linear-gradient(135deg,#f1f8ff,#ffffff);border-radius:24px;padding:18px;margin-bottom:16px}.selectedSummary h3{font-size:25px;letter-spacing:-.03em;margin:0 0 8px}.selectedSummary p{margin:0;color:#415870;line-height:1.45}.stepsGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.stepCard{border:1px solid var(--line);background:#fff;border-radius:18px;padding:14px;cursor:pointer;transition:.16s}.stepCard:hover,.stepCard.active{border-color:#8dc5ff;background:#f0f8ff}.stepCard b{display:block;margin-bottom:5px}.stepCard span{color:var(--muted);font-size:14px;line-height:1.35}.whyGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.why{background:#f8fbfe;border:1px solid var(--line);border-radius:18px;padding:14px;min-height:116px}.why b{display:block;margin-bottom:7px}.why span{color:var(--muted);font-size:14px;line-height:1.35}.protectNote{background:#fff4e0;border:1px solid #f6d79a;border-radius:18px;padding:14px;color:#785600;line-height:1.38;margin-top:14px}
+
+    .mapMiniPanel{padding:18px 22px 22px;border-top:1px solid var(--line);background:#fff}
+    .mapMiniPanel .infoCard{margin:0;background:var(--panel2);box-shadow:none}
+    .mapMiniPanel .miniCharts{grid-template-columns:repeat(4,1fr)}
+    @media(max-width:1320px){.dashboardGrid{grid-template-columns:repeat(3,1fr)}.insightGrid,.situationLayout,.calcLayout,.orderIntro{grid-template-columns:1fr}.mapWrap{height:620px}.orderForm{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:780px){.app{padding:18px}.topbar{display:block}.tabs{justify-content:flex-start;margin-top:16px}.dashboardGrid,.orderForm,.miniCharts,.stepsGrid,.whyGrid,.pointGrid{grid-template-columns:1fr}h1{font-size:29px}.mapWrap{height:520px}.scenarioHeader{grid-template-columns:42px 1fr}.decision{grid-column:2}.calcLayout{gap:14px}.mapHint{display:none}.donutBox{grid-template-columns:1fr}.donutBig{margin:auto}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <h1>Геоаналитический модуль контейнерного парка</h1>
+        <p class="subtitle"> </p>
+      </div>
+      <div class="topActions">
+        <div class="dbStatus"><i></i><span>База данных актуализирована</span></div>
+        <nav class="tabs">
+          <button id="tabSituation" class="primary">Ситуация на сети</button>
+          <button id="tabOrder">Расчёт заказа</button>
+        </nav>
+      </div>
+    </header>
+
+    <section id="pageSituation" class="page active">
+      <div class="dashboardGrid">
+        <div class="dashCard">
+          <div class="dashHead"><small>Парк в модели</small><b>1 094</b></div>
+          <div class="dashSub"> </div>
+          <div class="fleetChart" id="parkMiniChart"></div>
+          <div class="tinyLegend"><span><i style="background:#35b7ff"></i>20ф</span><span><i style="background:#26c281"></i>40ф</span></div>
+        </div>
+
+        <div class="dashCard">
+          <div class="dashHead"><small>В активном обороте</small><b class="good" id="kpiRun">742</b></div>
+          <div class="dashSub"> </div>
+          <div class="sparkBars" id="activeBars"></div>
+        </div>
+
+        <div class="dashCard">
+          <div class="dashHead"><small>На терминалах</small><b class="warn" id="kpiTerm">352</b></div>
+          <div class="dashSub"> </div>
+          <div class="terminalBars" id="terminalBars"></div>
+        </div>
+
+        <div class="dashCard">
+          <div class="dashHead"><small>Риск длительного простоя</small><b class="bad" id="kpiRisk">126</b></div>
+          <div class="dashSub"> </div>
+          <div class="riskGraph" id="riskRows"></div>
+        </div>
+
+        <div class="dashCard">
+          <div class="dashHead"><small>Расчётная мощность</small><b id="capacityText">450 / 900</b></div>
+          <div class="dashSub">автоматический пересчёт маршрутов</div>
+          <div class="counterBox">
+            <div class="counterTop"><b id="calcDone">450</b><span>пересчитано</span></div>
+            <div class="counterTrack"><i id="calcProgress" style="width:50%"></i></div>
+            <div class="counterTop" style="margin-top:9px"><span>осталось</span><b id="calcLeft" style="font-size:22px;color:#61758b">450</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insightGrid">
+        <div class="insight">
+          <h2>Парк в работе</h2>
+          <p>Сразу видно, какая часть парка работает, а какая требует решения от логиста</p>
+          <div class="donutBox">
+            <div class="donutBig"><span>68%<small style="display:block;font-size:11px;color:#61758b">в обороте</small></span></div>
+            <div class="legendRows">
+              <div><span>в обороте</span><b>742</b></div>
+              <div><span>ждут ставку</span><b>226</b></div>
+              <div><span>риск простоя</span><b>126</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="insight">
+          <h2>Индекс сети сегодня</h2>
+          <p>Демонстрация индикаторами: где есть прибыль, где риск и где требуется пересчёт</p>
+          <div class="barRows">
+            <div class="barRow"><span>прибыльность</span><div class="bar"><i style="width:76%"></i></div><b>76</b></div>
+            <div class="barRow"><span>риск простоя</span><div class="bar"><i class="warn" style="width:46%"></i></div><b>46</b></div>
+            <div class="barRow"><span>актуальность</span><div class="bar"><i style="width:88%"></i></div><b>88</b></div>
+            <div class="barRow"><span>перегрузка</span><div class="bar"><i class="bad" style="width:39%"></i></div><b>39</b></div>
+          </div>
+        </div>
+        <div class="insight">
+          <h2>Точки внимания</h2>
+          <p>Карточки показывают, куда стоит смотреть в первую очередь</p>
+          <div class="pointGrid">
+            <div class="pointCard"><b>Владивосток</b><span><i class="statusDot"></i>Высокий оборот</span></div>
+            <div class="pointCard"><b>Иркутск</b><span><i class="statusDot"></i>Быстрая загрузка 20ф</span></div>
+            <div class="pointCard"><b>Москва</b><span><i class="statusDot warn"></i>Много парка, контроль ожидания</span></div>
+            <div class="pointCard"><b>Санкт-Петербург</b><span><i class="statusDot bad"></i>Риск простоя 20ф</span></div>
+            <div class="pointCard"><b>Екатеринбург</b><span><i class="statusDot warn"></i>Сезонное изменение спроса</span></div>
+            <div class="pointCard"><b>Китай</b><span><i class="statusDot"></i>Выгодное начало цикла</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="situationLayout">
+        <div class="panel">
+          <div class="panelTitle"><div><h2>Карта состояния сети</h2><p>Тепловой слой показывает текущую ситуацию: прибыльность, риск простоя, величина ставки или концентрацию парка</p></div></div>
+          <div class="mapToolbar">
+            <select id="layerSelect">
+              <option value="profit">Тепловой слой: потенциал прибыли</option>
+              <option value="wait">Тепловой слой: риск простоя</option>
+              <option value="rate">Тепловой слой: величина ставки</option>
+              <option value="stock">Тепловой слой: концентрация парка</option>
+            </select>
+            <button id="toggleHeat" class="active">Тепловой слой: вкл</button>
+            <button id="toggleTerminals" class="active">Терминалы: вкл</button>
+            <button id="toggleRoutes">Показать всю сеть</button>
+            <div class="grow"></div>
+            <button id="fitMap">Сбросить вид</button>
+          </div>
+          <div class="mapWrap">
+            <div id="situationMap"></div>
+            <div class="mapLegend">
+              <span><i class="legendDot" style="background:var(--green)"></i>прибыльная точка</span>
+              <span><i class="legendDot" style="background:var(--yellow)"></i>контроль</span>
+              <span><i class="legendDot" style="background:var(--red)"></i>риск простоя</span>
+              <span><i class="legendDot" style="border:3px solid var(--blue);background:#fff"></i>терминал</span>
+              <span><i class="legendDot" style="background:var(--blue)"></i>маршрут</span>
+            </div>
+            <div class="mapHint">Нажмите на город или терминал. Активный маршрут подсвечен рельсовой линией, поезд показывает движение по циклу</div>
+          </div>
+          <div class="mapMiniPanel">
+            <div class="infoCard">
+              <h3>Мини-панель</h3>
+              <div class="miniCharts">
+                <div class="donut"><div class="donutCircle" style="--p:68%"><span>68%</span></div><div><b>в обороте</b><small>доля активного парка</small></div></div>
+                <div class="donut"><div class="donutCircle" style="--p:52%"><span>52%</span></div><div><b>покрытие</b><small>расчитано из потенциала</small></div></div>
+                <div class="donut"><div class="donutCircle" style="--p:35%"><span>35%</span></div><div><b>зона эффекта</b><small>простои можно снизить</small></div></div>
+                <div class="donut"><div class="donutCircle" style="--p:86%"><span>86%</span></div><div><b>данные</b><small>актуальность базы</small></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="panel infoStack">
+          <div class="infoCard" id="locationCard"></div>
+          <div class="infoCard">
+            <h3>Ключевые маршруты</h3>
+            <p class="muted">Выберите какой активный маршрутотобразить на карте</p>
+            <div class="routeList" id="routeList"></div>
+          </div>
+
+        </aside>
+      </div>
+    </section>
+
+    <section id="pageOrder" class="page">
+      <div class="orderIntro">
+        <div class="orderPanel">
+          <h2>Расчёт полного цикла по заявке</h2>
+          <p>Сначала задаётся потребность клиента: откуда забрать и куда доставить. Затем система строит дальнейший цикл контейнера и сравнивает варианты по годовой рентабельности, прибыли, сроку и риску простоя</p>
+          <div class="orderForm">
+            <div class="field"><label>Забрать груз</label><select id="fromCity"></select></div>
+            <div class="field"><label>Доставить клиенту</label><select id="toCity"></select></div>
+            <div class="field"><label>Тип контейнера</label><select id="boxType"><option value="20">20ф</option><option value="40">40ф</option></select></div>
+            <div class="field"><label>Наличие собственного парка</label><select id="ownAvailability"><option value="high">контейнер рядом есть</option><option value="medium">нужно проверить подход</option><option value="low">своего контейнера рядом нет</option></select></div>
+            <div class="field"><label>Критерий компании</label><select id="companyMode"><option value="balance">баланс прибыль / цикл</option><option value="annual">максимум годовой рентабельности</option><option value="risk">минимум риска простоя</option></select></div>
+            <div class="field"><label>Критерий отсечения</label><select id="threshold"><option value="15">15% годовых</option><option value="20">20% годовых</option><option value="10">10% годовых</option></select></div>
+            <div class="field"><div class="rangeTop"><span>Ставка клиента / выручка</span><b id="revenueVal">165 000 ₽</b></div><input id="revenueRange" type="range" min="85000" max="260000" step="5000" value="165000"></div>
+            <div class="field"><div class="rangeTop"><span>Допустимое ожидание после выгрузки</span><b id="waitVal">36 дн.</b></div><input id="waitRange" type="range" min="7" max="130" step="1" value="36"></div>
+            <div class="field"><div class="rangeTop"><span>Хранение в день</span><b id="storageVal">140 ₽</b></div><input id="storageRange" type="range" min="60" max="320" step="10" value="140"></div>
+            <div class="field"><div class="rangeTop"><span>Стоимость денег годовых</span><b id="moneyVal">17.5%</b></div><input id="moneyRange" type="range" min="10" max="28" step="0.5" value="17.5"></div>
+          </div>
+        </div>
+        <div class="eventBox">
+          <div>
+            <h3>Имитация рынка</h3>
+            <div id="eventLines"><div class="eventLine">Нажмите кнопку, чтобы система получила новые ставки, сроки ожидания или статус терминалов и пересчитала полный цикл</div></div>
+          </div>
+          <button id="simulateMarket" class="primary">Сымитировать изменение рынка</button>
+        </div>
+      </div>
+
+      <div class="calcLayout">
+        <div class="scenarioPanel">
+          <h2>Рейтинг полных циклов</h2>
+          <p class="lead">Сценарии начинаются с заявки клиента, а затем показывают, что выгоднее делать с контейнером после доставки</p>
+          <div id="scenarioList" class="scenarioList"></div>
+        </div>
+        <div class="analysisPanel">
+          <h2>Результат анализа</h2>
+          <div id="selectedSummary" class="selectedSummary"></div>
+          <div class="mapWrap compact"><div id="orderMap"></div></div>
+          <div class="stepsGrid" id="stepList"></div>
+          <div class="whyGrid" id="whyList"></div>
+          <div id="protectNote"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<script>
+const cities = {
+  'Москва': {lat:55.7558,lng:37.6173,status:'watch',profit:58,wait:98,rate:64,stock:120,note:'много парка и высокий риск долгого ожидания'},
+  'Санкт-Петербург': {lat:59.9343,lng:30.3351,status:'bad',profit:22,wait:175,rate:38,stock:38,note:'риск простоя 20ф, осторожно со своим парком'},
+  'Екатеринбург': {lat:56.8389,lng:60.6057,status:'watch',profit:60,wait:42,rate:65,stock:92,note:'сезонная точка, требуется регулярный пересчёт'},
+  'Челябинск': {lat:55.1644,lng:61.4368,status:'watch',profit:46,wait:55,rate:54,stock:36,note:'контроль терминальной обработки'},
+  'Новосибирск': {lat:55.0084,lng:82.9357,status:'good',profit:75,wait:31,rate:72,stock:84,note:'прибыльная точка для продолжения оборота'},
+  'Красноярск': {lat:56.0153,lng:92.8932,status:'watch',profit:57,wait:47,rate:59,stock:44,note:'средняя точка, решение зависит от ставки'},
+  'Иркутск': {lat:52.2871,lng:104.2806,status:'good',profit:82,wait:27,rate:80,stock:63,note:'быстрая выдача и высокий потенциал для 20ф'},
+  'Владивосток': {lat:43.1155,lng:131.8855,status:'good',profit:86,wait:24,rate:83,stock:71,note:'прибыльная точка, высокая скорость оборота'},
+  'Хабаровск': {lat:48.4802,lng:135.0719,status:'watch',profit:55,wait:49,rate:62,stock:39,note:'контроль ставки и доступности'},
+  'Краснодар': {lat:45.0355,lng:38.9753,status:'watch',profit:50,wait:44,rate:57,stock:34,note:'точка клиента, дальнейший цикл нужно выбирать по ставке'},
+  'Нижний Новгород': {lat:56.3269,lng:44.0059,status:'watch',profit:53,wait:40,rate:60,stock:46,note:'возможен промежуточный цикл'},
+  'Нинбо': {lat:29.8683,lng:121.5440,status:'good',profit:88,wait:18,rate:84,stock:105,note:'прибыльная китайская точка для запуска цикла'},
+  'Шанхай': {lat:31.2304,lng:121.4737,status:'good',profit:83,wait:22,rate:81,stock:98,note:'прибыльная точка, но не единственный финал цикла'}
+};
+const terminals = [
+  {name:'ФУТОВ ПОРТ',city:'Москва',lat:55.706,lng:37.436,role:'московский терминал, контроль остатка и подхода'},
+  {name:'ШВАРТОФ ПОРТ',city:'Москва',lat:55.795,lng:37.511,role:'московская терминальная зона'},
+  {name:'М19',city:'Екатеринбург',lat:56.879,lng:60.487,role:'терминальная зона Екатеринбурга'},
+  {name:'Терминал Челябинск',city:'Челябинск',lat:55.148,lng:61.333,role:'зона контроля обработки и ремонта'},
+  {name:'СТЕЙШН ПОРТ',city:'Владивосток',lat:43.105,lng:131.900,role:'выдача, хранение, переход в следующий цикл'}
+];
+const cityContainerData = {
+  'Москва': {c20:48,c40:72},
+  'Санкт-Петербург': {c20:27,c40:11},
+  'Екатеринбург': {c20:34,c40:58},
+  'Челябинск': {c20:16,c40:20},
+  'Новосибирск': {c20:30,c40:54},
+  'Красноярск': {c20:18,c40:26},
+  'Иркутск': {c20:37,c40:26},
+  'Владивосток': {c20:28,c40:43},
+  'Хабаровск': {c20:14,c40:25},
+  'Краснодар': {c20:15,c40:19},
+  'Нижний Новгород': {c20:19,c40:27},
+  'Нинбо': {c20:42,c40:63},
+  'Шанхай': {c20:41,c40:57},
+  'Резерв / подход': {c20:86,c40:138}
+};
+const activeStatusData = [
+  {name:'в пути',value:318,type:'good'},
+  {name:'выдача',value:166,type:'good'},
+  {name:'заявки',value:154,type:'warn'},
+  {name:'подход',value:104,type:'blue'}
+];
+const terminalStockData = [
+  {name:'ФУТОВ',value:72},
+  {name:'ШВАРТОФ',value:55},
+  {name:'М19',value:68},
+  {name:'Челябинск',value:42},
+  {name:'СТЕЙШН',value:115}
+];
+const riskContainerData = [
+  {city:'Санкт-Петербург',c20:28,c40:6,days:175},
+  {city:'Москва',c20:42,c40:20,days:98},
+  {city:'Челябинск',c20:18,c40:5,days:55},
+  {city:'Краснодар',c20:5,c40:2,days:44}
+];
+
+const baseRoutes = [
+  {name:'Китай – Владивосток – Москва',points:['Нинбо','Владивосток','Москва'],score:78,profit:62000,annual:210,days:72},
+  {name:'Екатеринбург – Владивосток',points:['Екатеринбург','Владивосток'],score:64,profit:38000,annual:46,days:48},
+  {name:'Москва – Иркутск – Китай',points:['Москва','Иркутск','Нинбо'],score:69,profit:44000,annual:65,days:92},
+  {name:'Краснодар – Китай',points:['Краснодар','Шанхай'],score:58,profit:31000,annual:34,days:88},
+  {name:'Москва – Краснодар – Владивосток',points:['Москва','Краснодар','Владивосток'],score:71,profit:52000,annual:74,days:86}
+];
+let selectedLocation='Москва', activeRoute=0, showAllRoutes=false, showHeat=true, showTerminals=true, selectedScenarioIndex=0;
+let marketState={revenueDelta:0, waitDelta:0, storageDelta:0, moneyDelta:0, demandDelta:0, hotCity:null, weakCity:null};
+let situationMap, orderMap, heatLayer, terminalLayer, routeLayer, cityLayer, trainMarker, orderRouteLayer, orderTrain;
+const bounds = L.latLngBounds([29,27],[61,137]);
+function fmt(n){return Math.round(n).toLocaleString('ru-RU')}
+function money(n){return (n<0?'-':'')+fmt(Math.abs(n))+' ₽'}
+function markerColor(st){return st==='good'?'#26c281':st==='bad'?'#ef4d5f':'#f5bd2e'}
+function markerClass(st){return st==='good'?'':' '+(st==='bad'?'bad':'watch')}
+function cityIcon(st){return L.divIcon({className:'',html:`<div class="cityIcon${markerClass(st)}"></div>`,iconSize:[34,34],iconAnchor:[17,17]})}
+function cityLabel(name,st){return L.divIcon({className:'',html:`<div class="cityLabel ${st}">${name}</div>`,iconSize:[120,32],iconAnchor:[8,38]})}
+function terminalIcon(){return L.divIcon({className:'',html:'<div class="terminalIcon"></div>',iconSize:[28,28],iconAnchor:[14,14]})}
+function terminalLabel(name){return L.divIcon({className:'',html:`<div class="terminalLabel">${name}</div>`,iconSize:[150,24],iconAnchor:[-16,28]})}
+function trainIcon(){return L.divIcon({className:'',html:'<div class="trainIcon"><span>🚂</span></div>',iconSize:[34,34],iconAnchor:[17,17]})}
+function linePts(points){return points.map(p=>[cities[p].lat,cities[p].lng])}
+function heatData(layer){
+  const spread = [
+    [0,0,1],
+    [.28,.20,.72],[-.25,.18,.66],[.20,-.22,.62],[-.18,-.20,.58],
+    [.48,.10,.44],[-.42,-.08,.40],[.05,.43,.38],[-.05,-.42,.36]
+  ];
+  const rows = [];
+  Object.entries(cities).forEach(([n,c])=>{
+    let v = layer==='profit'?c.profit:layer==='wait'?c.wait:layer==='rate'?c.rate:c.stock;
+    if(marketState.hotCity===n) v += 26;
+    if(marketState.weakCity===n) v += layer==='wait'?55:-18;
+    const intensity = Math.max(.12,Math.min(1,v/100));
+    const lngFactor = Math.max(.55,Math.cos(c.lat*Math.PI/180));
+    spread.forEach(([dy,dx,k])=>{
+      rows.push([c.lat+dy,c.lng+dx/lngFactor,Math.max(.08,Math.min(1,intensity*k))]);
+    });
+  });
+  return rows;
+}
+function initSituationMap(){
+  situationMap=L.map('situationMap',{zoomControl:true,worldCopyJump:false,attributionControl:true}).setView([52,82],4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:18,subdomains:'abcd',attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}).addTo(situationMap);
+  cityLayer=L.layerGroup().addTo(situationMap); terminalLayer=L.layerGroup().addTo(situationMap); routeLayer=L.layerGroup().addTo(situationMap);
+  renderCities(); renderTerminals(); renderHeat(); renderRoutes();
+  setTimeout(()=>situationMap.fitBounds(bounds,{padding:[26,26]}),150);
+}
+function renderCities(){cityLayer.clearLayers();Object.entries(cities).forEach(([n,c])=>{L.marker([c.lat,c.lng],{icon:cityIcon(c.status)}).addTo(cityLayer).bindTooltip(n,{className:`hoverLabel ${c.status}`,direction:'top',offset:[0,-18],opacity:1}).on('click',()=>selectLocation(n));});}
+function renderTerminals(){terminalLayer.clearLayers();if(!showTerminals)return;terminals.forEach(t=>{L.marker([t.lat,t.lng],{icon:terminalIcon()}).addTo(terminalLayer).bindTooltip(t.name,{className:'terminalHoverLabel',direction:'top',offset:[0,-16],opacity:1}).on('click',()=>selectTerminal(t));});}
+function renderHeat(){
+  if(heatLayer){situationMap.removeLayer(heatLayer);heatLayer=null}
+  if(!showHeat)return;
+  const layer=document.getElementById('layerSelect').value;
+  const gradient={
+    .08:'#476dff',
+    .22:'#39b9ff',
+    .42:'#30e09a',
+    .62:'#f5df39',
+    .82:'#ff9d34',
+    1:'#ef3b4f'
+  };
+  const radius = layer==='stock'?72:68;
+  heatLayer=L.heatLayer(heatData(layer),{
+    radius,
+    blur:46,
+    minOpacity:.36,
+    maxZoom:8,
+    max:1,
+    gradient
+  }).addTo(situationMap);
+}
+function renderRoutes(){routeLayer.clearLayers();const routes=showAllRoutes?baseRoutes:[baseRoutes[activeRoute]];routes.forEach((r,idx)=>{const pts=linePts(r.points);const active=showAllRoutes?idx===activeRoute:true;L.polyline(pts,{color:active?'#2589ff':'#6bbcff',weight:active?5:3,opacity:active?.85:.45,dashArray:active?'13 10':'7 12',className:'routeLine railDash'}).addTo(routeLayer);if(active) animateTrain(pts);});}
+function animateTrain(pts){if(trainMarker){situationMap.removeLayer(trainMarker)};let i=0,t=0;trainMarker=L.marker(pts[0],{icon:trainIcon(),interactive:false}).addTo(situationMap);clearInterval(window.trainTimer);window.trainTimer=setInterval(()=>{if(!pts.length)return;const a=pts[i%pts.length],b=pts[(i+1)%pts.length];t+=.018;if(t>=1){t=0;i=(i+1)%(pts.length-1)}const lat=a[0]+(b[0]-a[0])*t,lng=a[1]+(b[1]-a[1])*t;trainMarker.setLatLng([lat,lng]);},55)}
+function selectLocation(n){selectedLocation=n;updateLocationCard();}
+function selectTerminal(t){selectedLocation=t.city;updateLocationCard(t);}
+function updateLocationCard(term){
+  const c=cities[selectedLocation];
+  const parts=cityContainerData[selectedLocation] || {c20:0,c40:c.stock||0};
+  const total=(parts.c20||0)+(parts.c40||0);
+  let badge=c.status==='good'?'<span class="badge good">прибыльная точка</span>':c.status==='bad'?'<span class="badge bad">риск простоя</span>':'<span class="badge watch">контроль</span>';
+  document.getElementById('locationCard').innerHTML=`<h3>${term?term.name:selectedLocation}</h3>${badge}<p class="muted" style="margin-top:10px">${term?term.role:c.note}</p><div class="miniRows"><div class="miniRow"><span>Потенциал прибыли</span><b>${c.profit}/100</b></div><div class="spark"><i style="width:${c.profit}%"></i></div><div class="miniRow"><span>Ожидание</span><b>${c.wait} дн.</b></div><div class="miniRow"><span>Вероятность хорошей ставки</span><b>${c.rate}/100</b></div><div class="miniRow"><span>Парка в точке</span><b>${total} ед.</b></div><div class="miniRow"><span>20ф / 40ф</span><b>${parts.c20||0} / ${parts.c40||0}</b></div></div>`;
+}
+function updateRouteList(){document.getElementById('routeList').innerHTML=baseRoutes.map((r,i)=>`<div class="routeItem ${i===activeRoute?'active':''}" data-route="${i}"><b>${r.name}</b><span>${money(r.profit)} · ${r.annual}% годовых · ${r.days} дн.</span></div>`).join('');document.querySelectorAll('.routeItem').forEach(el=>el.onclick=()=>{activeRoute=+el.dataset.route;renderRoutes();updateRouteList();});}
+
+function shortName(name){
+  return {
+    'Москва':'МСК','Санкт-Петербург':'СПБ','Екатеринбург':'ЕКБ','Челябинск':'ЧЛБ','Новосибирск':'НСК','Красноярск':'КРС','Иркутск':'ИРК','Владивосток':'ВЛД','Хабаровск':'ХБР','Краснодар':'КРД','Нижний Новгород':'НН','Нинбо':'НБ','Шанхай':'ШХ','Резерв / подход':'Рез.'
+  }[name] || name.slice(0,3);
+}
+function renderDashboardCards(){
+  const topCities = Object.entries(cityContainerData)
+    .map(([name,x])=>({name,c20:x.c20,c40:x.c40,total:x.c20+x.c40}))
+    .sort((a,b)=>b.total-a.total)
+    .slice(0,5);
+  const maxFleet = Math.max(...topCities.map(x=>x.total));
+  document.getElementById('parkMiniChart').innerHTML = topCities.map(x=>{
+    const barH = Math.max(16, Math.round(x.total/maxFleet*64));
+    const p20 = x.total ? x.c20/x.total*100 : 0;
+    const p40 = x.total ? x.c40/x.total*100 : 0;
+    return `<div class="fleetCol" title="${x.name}: 20ф ${x.c20}, 40ф ${x.c40}, всего ${x.total}"><div class="fleetBarBox"><div class="fleetBar" style="height:${barH}px"><i class="stack20" style="height:${p20}%"></i><i class="stack40" style="height:${p40}%"></i></div></div><span>${shortName(x.name)}</span><b>${x.total}</b></div>`;
+  }).join('');
+
+  const maxActive = Math.max(...activeStatusData.map(x=>x.value));
+  document.getElementById('activeBars').innerHTML = activeStatusData.map(x=>{
+    const h = Math.max(18,Math.round(x.value/maxActive*62));
+    return `<div class="activeCol" title="${x.name}: ${x.value}"><div class="activeBar ${x.type||''}" style="height:${h}px"><span>${x.value}</span></div><b>${x.name}</b></div>`;
+  }).join('');
+
+  const maxTerm = Math.max(...terminalStockData.map(x=>x.value));
+  document.getElementById('terminalBars').innerHTML = terminalStockData.map(x=>`<div class="terminalRow" title="${x.name}: ${x.value}"><span>${x.name}</span><div><i style="width:${x.value/maxTerm*100}%"></i></div><b>${x.value}</b></div>`).join('');
+
+  const maxDays = Math.max(...riskContainerData.map(x=>x.days));
+  document.getElementById('riskRows').innerHTML = riskContainerData.map(x=>{
+    const total=x.c20+x.c40;
+    const h=Math.max(16,Math.round(x.days/maxDays*58));
+    return `<div class="riskCol" title="${x.city}: 20ф ${x.c20}, 40ф ${x.c40}, ожидание до ${x.days} дн."><div class="riskTowerWrap"><div class="riskTower" style="height:${h}px"><strong>${total}</strong></div></div><span>${shortName(x.city)}</span><em>${x.days} дн.</em></div>`;
+  }).join('');
+}
+
+let calcCounter=450;
+function updateCalcCounter(){
+  const total=900;
+  calcCounter += 1;
+  if(calcCounter>total) calcCounter=400;
+  const left=total-calcCounter;
+  document.getElementById('calcDone').textContent=fmt(calcCounter);
+  document.getElementById('calcLeft').textContent=fmt(left);
+  document.getElementById('capacityText').textContent=`${fmt(calcCounter)} / ${fmt(total)}`;
+  document.getElementById('calcProgress').style.width=(calcCounter/total*100)+'%';
+}
+function startCalcCounter(){
+  updateCalcCounter();
+  clearInterval(window.calcCounterTimer);
+  window.calcCounterTimer=setInterval(updateCalcCounter,5000);
+}
+function bindSituation(){document.getElementById('layerSelect').onchange=()=>renderHeat();document.getElementById('toggleHeat').onclick=e=>{showHeat=!showHeat;e.currentTarget.classList.toggle('active',showHeat);e.currentTarget.textContent='Тепловой слой: '+(showHeat?'вкл':'выкл');renderHeat();};document.getElementById('toggleTerminals').onclick=e=>{showTerminals=!showTerminals;e.currentTarget.classList.toggle('active',showTerminals);e.currentTarget.textContent='Терминалы: '+(showTerminals?'вкл':'выкл');renderTerminals();};document.getElementById('toggleRoutes').onclick=e=>{showAllRoutes=!showAllRoutes;e.currentTarget.classList.toggle('active',showAllRoutes);e.currentTarget.textContent=showAllRoutes?'Показать активный маршрут':'Показать всю сеть';renderRoutes();};document.getElementById('fitMap').onclick=()=>situationMap.fitBounds(bounds,{padding:[26,26]});}
+function populateOrderSelects(){const orderCities=['Москва','Санкт-Петербург','Екатеринбург','Челябинск','Новосибирск','Красноярск','Иркутск','Владивосток','Хабаровск','Краснодар','Нижний Новгород','Нинбо','Шанхай'];document.getElementById('fromCity').innerHTML=orderCities.map(c=>`<option>${c}</option>`).join('');document.getElementById('toCity').innerHTML=orderCities.map(c=>`<option>${c}</option>`).join('');document.getElementById('fromCity').value='Москва';document.getElementById('toCity').value='Краснодар';}
+function initOrderMap(){orderMap=L.map('orderMap',{zoomControl:true,attributionControl:false}).setView([52,82],4);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:18,subdomains:'abcd'}).addTo(orderMap);orderRouteLayer=L.layerGroup().addTo(orderMap);setTimeout(()=>orderMap.fitBounds(bounds,{padding:[18,18]}),120)}
+function distanceDays(a,b){const A=cities[a],B=cities[b];const dx=(A.lng-B.lng)*Math.cos(((A.lat+B.lat)/2)*Math.PI/180),dy=A.lat-B.lat;const dist=Math.sqrt(dx*dx+dy*dy)*111;return Math.max(7,Math.round(dist/92));}
+function scoreCity(n,context={}){const c=cities[n];let v=c.profit*0.55+c.rate*0.35-c.wait*0.28+c.stock*0.08;if(marketState.hotCity===n)v+=25;if(marketState.weakCity===n)v-=28;if(context.avoid&&context.avoid.includes(n))v-=40;return v;}
+function bestCity(avoid=[],type='balanced'){let names=Object.keys(cities).filter(n=>!avoid.includes(n));if(type==='east')names=names.filter(n=>['Владивосток','Иркутск','Хабаровск','Нинбо','Шанхай','Новосибирск'].includes(n));if(type==='rf')names=names.filter(n=>!['Нинбо','Шанхай'].includes(n));if(type==='sell')names=names.filter(n=>['Владивосток','Иркутск','Новосибирск','Москва','Екатеринбург','Нижний Новгород'].includes(n));return names.sort((a,b)=>scoreCity(b,{avoid})-scoreCity(a,{avoid}))[0];}
+function updateRangeLabels(){document.getElementById('revenueVal').textContent=fmt(+document.getElementById('revenueRange').value)+' ₽';document.getElementById('waitVal').textContent=document.getElementById('waitRange').value+' дн.';document.getElementById('storageVal').textContent=document.getElementById('storageRange').value+' ₽';document.getElementById('moneyVal').textContent=document.getElementById('moneyRange').value+'%';}
+
+function getOrderInputs(){
+  return {
+    from:document.getElementById('fromCity').value,
+    to:document.getElementById('toCity').value,
+    boxType:document.getElementById('boxType').value,
+    avail:document.getElementById('ownAvailability').value,
+    mode:document.getElementById('companyMode').value,
+    threshold:+document.getElementById('threshold').value,
+    revenue:+document.getElementById('revenueRange').value+marketState.revenueDelta,
+    wait:+document.getElementById('waitRange').value,
+    storage:+document.getElementById('storageRange').value+marketState.storageDelta,
+    money:(+document.getElementById('moneyRange').value+marketState.moneyDelta)/100
+  };
+}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function routeDays(points){let d=0;for(let i=0;i<points.length-1;i++)d+=distanceDays(points[i],points[i+1]);return d}
+function seededWave(name,shift=0){const o=getOrderInputs();let seed=o.revenue/7000+o.wait*1.7+o.storage/12+o.money*280+(o.boxType==='40'?19:7)+(marketState.hotCity?marketState.hotCity.length*3:0)+(marketState.weakCity?marketState.weakCity.length*5:0)+shift;let code=0;for(let i=0;i<name.length;i++)code+=name.charCodeAt(i)*(i+1);return Math.sin(code+seed)*9}
+function cityCategory(n){if(['Нинбо','Шанхай'].includes(n))return 'china';if(['Владивосток','Хабаровск','Иркутск','Красноярск','Новосибирск'].includes(n))return 'east';if(['Москва','Санкт-Петербург','Екатеринбург','Челябинск','Нижний Новгород','Краснодар'].includes(n))return 'west';return 'rf'}
+function pickPoint(avoid=[],kind='balanced',offset=0){
+  const o=getOrderInputs();
+  let pool=Object.keys(cities).filter(n=>!avoid.includes(n));
+  if(kind==='east') pool=pool.filter(n=>['Владивосток','Хабаровск','Иркутск','Красноярск','Новосибирск','Нинбо','Шанхай'].includes(n));
+  if(kind==='west') pool=pool.filter(n=>['Москва','Санкт-Петербург','Екатеринбург','Челябинск','Нижний Новгород','Краснодар','Новосибирск'].includes(n));
+  if(kind==='rf') pool=pool.filter(n=>!['Нинбо','Шанхай'].includes(n));
+  if(kind==='china') pool=pool.filter(n=>['Нинбо','Шанхай'].includes(n));
+  if(kind==='park') pool=pool.filter(n=>['Москва','Екатеринбург','Новосибирск','Владивосток','Иркутск'].includes(n));
+  if(kind==='sell') pool=pool.filter(n=>['Владивосток','Иркутск','Новосибирск','Москва','Екатеринбург','Нижний Новгород','Шанхай','Нинбо'].includes(n));
+  if(!pool.length) pool=Object.keys(cities).filter(n=>!avoid.includes(n));
+  const scored=pool.map(n=>{
+    const c=cities[n];
+    let v=c.profit*.46+c.rate*.34-c.wait*.30+c.stock*.08+seededWave(n,offset*13);
+    if(kind==='sell') v+=c.profit*.22+c.stock*.10-c.wait*.16;
+    if(kind==='park') v+=c.stock*.22-c.wait*.18;
+    if(kind==='china') v+=cityCategory(o.to)==='east'?10:-2;
+    if(kind==='east') v+=cityCategory(o.to)==='west'?7:0;
+    if(marketState.hotCity===n)v+=24;
+    if(marketState.weakCity===n)v-=35;
+    if(o.money>.21&&c.wait>65)v-=20;
+    if(o.storage>210&&c.wait>55)v-=18;
+    return {n,v};
+  }).sort((a,b)=>b.v-a.v);
+  return scored[Math.min(offset,scored.length-1)].n;
+}
+function endActionFor(city,prefer='auto'){
+  const c=cities[city];
+  if(prefer==='sell') return 'продажа контейнера';
+  if(prefer==='park') return 'возврат в парк';
+  if(prefer==='wait') return 'ожидание ставки';
+  if(c.status==='good'&&c.wait<34) return 'возврат в парк';
+  if(c.profit>78||c.rate>80) return 'продажа контейнера';
+  if(c.wait>70) return 'перевод в прибыльную точку';
+  return 'ожидание ставки';
+}
+function scenarioMetrics(points,opts){
+  const o=getOrderInputs();
+  const containerCost=o.boxType==='20'?100000:155000;
+  const clientDays=distanceDays(points[0],points[1]);
+  const travel=routeDays(points);
+  const waitDays=opts.waitDays||0;
+  let days=Math.max(1,travel+waitDays+(opts.handlingDays||6));
+  const avg=points.reduce((s,p)=>s+scoreCity(p),0)/points.length;
+  const destinationRisk=points.reduce((s,p)=>s+(cities[p].status==='bad'?18000:cities[p].status==='watch'?6500:0),0);
+  const weakRisk=marketState.weakCity&&points.includes(marketState.weakCity)?20000:0;
+  const hotBonus=marketState.hotCity&&points.includes(marketState.hotCity)?15000:0;
+  const futureIncome=(opts.futureIncome||0)+hotBonus;
+  const saleMargin=opts.saleMargin||0;
+  const income=Math.max(0,o.revenue)+futureIncome+saleMargin;
+  const legCost=(points.length-1)*8500+travel*360;
+  const clientCost=Math.max(28000,Math.max(0,o.revenue)*0.43+clientDays*260);
+  const futureCost=Math.max(0,futureIncome)*0.30+Math.max(0,saleMargin)*0.08;
+  const emptyCost=opts.emptyRelocation?distanceDays(points[1],points[2]||points[1])*540+14000:0;
+  const terminalCost=points.length*4300+(opts.repairRisk||0);
+  const storageCost=waitDays*Math.max(0,o.storage);
+  const fot=Math.max(0,o.revenue+futureIncome)*0.15;
+  const riskCost=(destinationRisk+weakRisk)*(opts.riskFactor||1);
+  const capitalBase=containerCost+Math.max(0,o.revenue)*0.55+Math.max(0,futureIncome)*0.25+35000;
+  const moneyCost=capitalBase*o.money*days/365;
+  let profit=income-clientCost-futureCost-legCost-emptyCost-terminalCost-storageCost-fot-riskCost-moneyCost+(opts.efficiencyBonus||0);
+  if(opts.mode==='rent'){
+    days=Math.max(18,clientDays+8);
+    const rentRisk=cities[o.to].status==='bad'?9000:0;
+    const rentBase=Math.max(0,o.revenue)*0.18+8000;
+    profit=rentBase-16000-rentRisk+(o.avail==='low'?8000:0)+(o.mode==='risk'?5000:0);
+  }
+  if(opts.mode==='protect'){
+    profit=0;days=0;
+  }
+  const annualDenominator=Math.max(days,45);
+  const reliability=opts.mode==='rent'?0.82:clamp(1-riskCost/85000-waitDays/420,0.58,0.96);
+  let annual=opts.mode==='protect'?0:(profit/capitalBase*365/annualDenominator*100*reliability);
+  const riskIndex=riskCost+waitDays*110+Math.max(0,o.storage-140)*55+Math.max(0,o.money-.175)*60000;
+  let score=profit/1450+annual*.36-days*.18+avg*.22-riskIndex/5200;
+  if(o.mode==='annual') score+=annual*.18-days*.12;
+  if(o.mode==='risk') score-=riskIndex/4200+waitDays*.15;
+  if(o.mode==='balance') score+=profit/4200;
+  if(opts.mode==='rent') score+=o.avail==='low'?18:(o.mode==='risk'?10:0);
+  if(opts.mode==='protect') score=8;
+  return {profit,annual,days,score:clamp(score,0,100),risk:riskIndex};
+}
+function addScenario(arr,title,sub,points,opts,steps,why,decision='рабочий цикл'){
+  const key=points.join('|')+'|'+(opts.finalAction||opts.mode||decision);
+  if(arr.some(x=>x.key===key))return;
+  const s={key,title,sub,points,opts,steps,why,decision,protect:opts.mode==='protect',metrics:null};
+  s.metrics=scenarioMetrics(points,opts);
+  arr.push(s);
+}
+function buildScenarios(){
+  const o=getOrderInputs();
+  const from=o.from,to=o.to,avail=o.avail;
+  const dest=cities[to];
+  const baseWait=clamp(dest.wait+marketState.waitDelta+(marketState.demandDelta<0?12:0),7,180);
+  const riskDestination=dest.status==='bad'||baseWait>75;
+  const shortMarket=o.money>.21||o.storage>210||o.wait<22;
+  let arr=[];
+  const firstNextKind=cityCategory(to)==='west'?'east':cityCategory(to)==='east'?'west':'rf';
+  const nextA=pickPoint([from,to],firstNextKind,0);
+  const nextB=pickPoint([from,to,nextA],firstNextKind==='east'?'rf':'east',1);
+  const sellPoint=pickPoint([from,to,nextA,nextB],'sell',2);
+  const parkPoint=pickPoint([from,to,nextA,nextB,sellPoint],'park',3);
+  const relocatePoint=pickPoint([from,to],riskDestination||shortMarket?'park':'balanced',4);
+  const afterRelocate=pickPoint([from,to,relocatePoint],cityCategory(relocatePoint)==='west'?'east':'rf',5);
+  const waitAtDest=clamp(Math.round(Math.min(o.wait,baseWait)*(shortMarket?.35:.58)),6,110);
+
+  if(dest.status==='good'&&!shortMarket){
+    const action=endActionFor(to,'park');
+    addScenario(arr,`${from} – ${to} – ${action}`,`Закрыть заявку и оставить контейнер в прибыльной точке, где вероятна быстрая следующая выдача`,[from,to],{waitDays:Math.max(7,waitAtDest),futureIncome:42000+dest.rate*210,saleMargin:0,extraCost:2500,finalAction:action,efficiencyBonus:6000},[{name:`Заявка клиента: ${from} – ${to}`,text:'первый этап обязателен, так как он закрывает потребность клиента'},{name:`Оценка ${to}`,text:`точка прибыльная: ожидание около ${Math.round(baseWait)} дн., ставка ${dest.rate}/100`},{name:action,text:'контейнер не переводится лишний раз и остаётся доступным для следующей заявки'}],[`Сценарий не добавляет лишнее плечо после выгрузки`,`Он работает только если пункт доставки с достаточно высокой ставкой и ожиданием`,`Решение снижает издержки на перемещение и сохраняет контейнер в обороте`]);
+  }
+
+  addScenario(arr,`${from} – ${to} – ${nextA} – ${endActionFor(nextA)}`,`После клиентской доставки система переводит контейнер в более прибыльную точку для следующей загрузки или продажи`,[from,to,nextA],{waitDays:Math.max(8,Math.round(waitAtDest*.72)),futureIncome:36000+cities[nextA].rate*360,saleMargin:cities[nextA].profit>80?17000:6000,extraCost:9000,finalAction:endActionFor(nextA)},[{name:`Доставка клиенту: ${from} – ${to}`,text:'заказ клиента закрывается первым плечом'},{name:`Проверка точки ${to}`,text:`если ожидание выше допустимого, система ищет следующий пункт с лучшей ставкой`},{name:`Переход в ${nextA}`,text:'выбран по сочетанию ставки, простоя и вероятности следующей загрузки'},{name:endActionFor(nextA),text:'финал цикла определяется экономикой конечной точки'}],[`Цикл оценивает не только доставку клиенту, но и дальнейшую судьбу контейнера`,`Следующая точка выбрана, чтобы не держать контейнер в слабом ожидании`,`Рейтинг учитывает прибыль, срок цикла, стоимость денег и риск простоя`]);
+
+  if(o.wait>=28&&!shortMarket){
+    addScenario(arr,`${from} – ${to} – ожидание ставки – ${nextB} – ${endActionFor(nextB)}`,`Оставить контейнер после выгрузки до появления ставки, затем отправить его в следующий экономически сильный цикл`,[from,to,nextB],{waitDays:clamp(Math.round(Math.min(o.wait,baseWait)*.92),18,130),futureIncome:59000+cities[nextB].rate*310,saleMargin:cities[nextB].profit>78?9000:0,extraCost:6500,finalAction:endActionFor(nextB,'wait'),riskFactor:1.12},[{name:`Доставка ${from} – ${to}`,text:'начальная заявка выполняется своим контейнером'},{name:'Ожидание ставки',text:'ожидание допускается только пока прирост ставки перекрывает хранение и стоимость денег'},{name:`Следующий маршрут: ${nextB}`,text:'после появления ставки контейнер уходит в новую точку'},{name:endActionFor(nextB),text:'в финале контейнер продаётся, возвращается в парк или ждёт следующую ставку'}],[`Этот вариант может дать больше прибыли, но становится хуже при дорогом хранении или росте ставки денег`,`Он не должен быть первым, если простой съедает экономику`,`При изменении ползунков ожидания или стоимости денег сценарий может уйти вниз или исчезнуть`]);
+  }
+
+  if(riskDestination||shortMarket||o.mode==='risk'){
+    addScenario(arr,`${from} – ${to} – порожний перевод в ${relocatePoint} – ${afterRelocate}`,`Если пункт доставки слабый, система выводит контейнер на другой терминал, где выше шанс получить ставку`,[from,to,relocatePoint,afterRelocate],{waitDays:Math.max(6,Math.round(waitAtDest*.38)),futureIncome:50000+cities[relocatePoint].rate*250+cities[afterRelocate].rate*180,saleMargin:7000,emptyRelocation:true,extraCost:18000,finalAction:'перевод порожним'},[{name:`Доставка клиенту: ${from} – ${to}`,text:'заказ закрывается, но контейнер не оставляется в слабой точке'},{name:`Порожний перевод в ${relocatePoint}`,text:'это платное действие, поэтому оно появляется только при риске долгого простоя'},{name:`Новая загрузка: ${relocatePoint} – ${afterRelocate}`,text:'после перевода система ищет более высокую ставку'},{name:endActionFor(afterRelocate),text:'финальная точка определяется вероятностью следующей выдачи или продажи'}],[`Порожний перевод не является целью, он нужен только если простой в точке доставки дороже перемещения`,`Сценарий усиливается при росте риска простоя и высокой стоимости хранения`,`Если ожидание допустимое и точка хорошая, этот вариант опускается ниже`]);
+  }
+
+  if(!riskDestination||o.revenue>155000){
+    addScenario(arr,`${from} – ${to} – ${sellPoint} – продажа контейнера`, `Система проверяет вариант фиксации стоимости контейнера в точке, где продажа или резерв экономически лучше ожидания`,[from,to,sellPoint],{waitDays:Math.max(7,Math.round(waitAtDest*.55)),futureIncome:27000+cities[sellPoint].rate*210,saleMargin:22000+cities[sellPoint].profit*160,extraCost:15000,finalAction:'продажа контейнера'},[{name:`Заявка клиента: ${from} – ${to}`,text:'исходная доставка остаётся обязательной частью цикла'},{name:`Переход в ${sellPoint}`,text:'точка выбрана как место, где стоимость контейнера или спрос выше'},{name:'Продажа контейнера',text:'цикл завершается фиксацией результата, а не бесконечным продолжением оборота'}],[`Продажа появляется как полноценный финал цикла, а не как отдельное действие`,`Сценарий полезен при высокой ставке клиента или прибыльной конечной точке`,`Если продажа слабее оборота, рейтинг опускает этот вариант ниже`]);
+  }
+
+  addScenario(arr,`${from} – ${to} – ${parkPoint} – возврат в парк`, `После заявки контейнер возвращается в точку, где его проще контролировать и быстрее включить в следующую выдачу`,[from,to,parkPoint],{waitDays:Math.max(7,Math.round(waitAtDest*.48)),futureIncome:30000+cities[parkPoint].stock*130,saleMargin:0,extraCost:11000,finalAction:'возврат в парк',riskFactor:.82},[{name:`Доставка клиенту: ${from} – ${to}`,text:'первое плечо закрывает заявку'},{name:`Возврат в ${parkPoint}`,text:'выбрана точка с лучшим контролем парка и доступностью следующей заявки'},{name:'Возврат в парк',text:'цикл завершается управляемым размещением контейнера'}],[`Этот вариант обычно не максимизирует разовую прибыль, но снижает риск потери контроля над контейнером`,`Он усиливается при высокой стоимости денег и при режиме минимизации риска`,`Финал: контейнер возвращается в парк, а не остаётся в неопределённом обороте`]);
+
+  if(avail!=='high'||riskDestination||o.mode==='risk'||o.revenue<125000){
+    addScenario(arr,`Арендный контейнер: ${from} – ${to}`,`Клиентская заявка закрывается арендным контейнером, а собственный парк не заводится в слабый цикл`,[from,to],{waitDays:8,mode:'rent',finalAction:'арендный контейнер'},[{name:`Заявка клиента: ${from} – ${to}`,text:'для клиента маршрут выполняется напрямую'},{name:'Собственный парк не вовлекается',text:'если точка назначения рискованная или своего контейнера рядом нет, парк не замораживается'},{name:'Завершение',text:'арендный цикл закрывается после доставки, без дальнейшей судьбы собственного контейнера'}],[`Это не отказ от заявки, а способ не создавать простой собственного парка.`,`Сценарий поднимается выше при слабой точке доставки, низкой доступности своего контейнера или режиме минимизации риска`,`При хорошей ставке и прибыльной точке назначения собственный контейнер обычно оказывается выше.`],'арендный цикл');
+  }
+
+  addScenario(arr,`Не запускать собственный контейнер по заявке ${from} – ${to}`,`Предохранитель: если все рабочие циклы ниже порога, систему лучше использовать для пересогласования ставки или аренды`,[from,to],{waitDays:baseWait,mode:'protect',finalAction:'не запускать'},[{name:'Проверка порога',text:`минимальный критерий компании: ${o.threshold}% годовых`},{name:'Остановка собственного цикла',text:'если собственный контейнер ухудшает оборот, он не запускается'},{name:'Дальше',text:'пересогласовать ставку, взять аренду или дождаться обновления рынка'}],[`Это не маршрут, а защита от слабого управленческого решения`,`Он становится первым только когда нет рабочего варианта выше порога`,`Если хотя бы один цикл проходит критерий, защитный вариант остаётся внизу`],'не запускать');
+
+  let working=arr.filter(s=>!s.protect);
+  working.sort((a,b)=>{
+    const ad=a.metrics.profit>b.metrics.profit&&a.metrics.annual>b.metrics.annual&&a.metrics.days<=b.metrics.days+18;
+    const bd=b.metrics.profit>a.metrics.profit&&b.metrics.annual>a.metrics.annual&&b.metrics.days<=a.metrics.days+18;
+    if(ad&&!bd)return -1;
+    if(bd&&!ad)return 1;
+    return b.metrics.score-a.metrics.score;
+  });
+  const protect=arr.find(s=>s.protect);
+  const anyGood=working.some(s=>s.metrics.annual>=o.threshold&&s.metrics.profit>0);
+  const maxCount=clamp(4+Math.round((o.wait-20)/60)+(riskDestination?1:0)+(avail!=='high'?1:0),4,6);
+  if(!anyGood&&protect){protect.metrics.score=58;return [protect,...working.slice(0,maxCount-1)];}
+  return [...working.slice(0,maxCount),protect].filter(Boolean);
+}
+function renderScenarios(){updateRangeLabels();const list=buildScenarios();if(selectedScenarioIndex>=list.length)selectedScenarioIndex=0;document.getElementById('scenarioList').innerHTML=list.map((s,i)=>{const annualClass=s.metrics.annual>=+document.getElementById('threshold').value?'good':s.metrics.annual>0?'watch':'bad';const profitClass=s.metrics.profit>0?'good':'bad';const decisionClass=s.decision==='рабочий цикл'?'good':s.decision==='защитный цикл'?'watch':'bad';return `<div class="scenarioCard ${i===selectedScenarioIndex?'active':''}" data-scenario="${i}"><div class="scenarioHeader"><div class="rank">${i+1}</div><div><div class="scenarioTitle">${s.title}</div><div class="scenarioSub">${s.sub}</div></div><span class="badge ${decisionClass} decision">${s.decision}</span></div><div class="scenarioMetrics"><span class="metric ${profitClass}">${money(s.metrics.profit)}</span><span class="metric ${annualClass}">${Math.round(s.metrics.annual)}% годовых</span><span class="metric blue">${s.metrics.days} дн.</span><span class="metric">оценка ${Math.round(s.metrics.score)}/100</span></div></div>`}).join('');document.querySelectorAll('.scenarioCard').forEach(el=>el.onclick=()=>{selectedScenarioIndex=+el.dataset.scenario;renderScenarios();});renderSelectedScenario(list[selectedScenarioIndex]);}
+function renderSelectedScenario(s){document.getElementById('selectedSummary').innerHTML=`<h3>${s.title}</h3><p>${s.sub} Итог: ${money(s.metrics.profit)}, ${Math.round(s.metrics.annual)}% годовых, ${s.metrics.days} дн. полного цикла.</p>`;document.getElementById('stepList').innerHTML=s.steps.map((x,i)=>`<div class="stepCard"><b>${i+1}. ${x.name}</b><span>${x.text}</span></div>`).join('');document.getElementById('whyList').innerHTML=s.why.map((x,i)=>`<div class="why"><b>${['Почему','Ограничение','Действие'][i]||'Вывод'}</b><span>${x}</span></div>`).join('');document.getElementById('protectNote').innerHTML=s.protect?'<div class="protectNote">Система не предлагает запускать собственный контейнер, потому что ни один рабочий цикл не проходит экономический порог. Это защита от решения, которое внешне закрывает заявку, но ухудшает оборот парка.</div>':'';renderOrderRoute(s.points);}
+function renderOrderRoute(points){orderRouteLayer.clearLayers();if(orderTrain){orderMap.removeLayer(orderTrain);orderTrain=null}points.forEach(p=>{const c=cities[p];L.marker([c.lat,c.lng],{icon:cityIcon(c.status)}).addTo(orderRouteLayer);L.marker([c.lat,c.lng],{icon:cityLabel(p,c.status),interactive:false}).addTo(orderRouteLayer);});const pts=linePts(points);L.polyline(pts,{color:'#2589ff',weight:5,opacity:.88,dashArray:'13 10',className:'routeLine railDash'}).addTo(orderRouteLayer);orderMap.fitBounds(L.latLngBounds(pts),{padding:[45,45],maxZoom:5});animateOrderTrain(pts);}
+function animateOrderTrain(pts){let i=0,t=0;orderTrain=L.marker(pts[0],{icon:trainIcon(),interactive:false}).addTo(orderMap);clearInterval(window.orderTrainTimer);window.orderTrainTimer=setInterval(()=>{if(!pts.length||pts.length<2)return;const a=pts[i%pts.length],b=pts[(i+1)%pts.length];t+=.02;if(t>=1){t=0;i=(i+1)%(pts.length-1)}orderTrain.setLatLng([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);},55)}
+function simulateMarket(){const events=[];const citiesList=Object.keys(cities);const hot=citiesList[Math.floor(Math.random()*citiesList.length)];const weak=citiesList[Math.floor(Math.random()*citiesList.length)];marketState.hotCity=hot;marketState.weakCity=weak;const changes=['revenue','wait','storage','money','demand'].sort(()=>Math.random()-.5).slice(0,2+Math.floor(Math.random()*3));if(changes.includes('revenue')){const delta=[-25000,-15000,15000,25000,35000][Math.floor(Math.random()*5)];marketState.revenueDelta=delta;events.push(`Ставка по заявке изменилась на ${delta>0?'+':''}${fmt(delta)} ₽.`)}if(changes.includes('wait')){const delta=[-12,-6,8,15,24][Math.floor(Math.random()*5)];marketState.waitDelta=delta;events.push(`Ожидание на части терминалов изменилось на ${delta>0?'+':''}${delta} дн.`)}if(changes.includes('storage')){const delta=[-30,-10,20,40,70][Math.floor(Math.random()*5)];marketState.storageDelta=delta;events.push(`Стоимость хранения изменилась на ${delta>0?'+':''}${delta} ₽ в день.`)}if(changes.includes('money')){const delta=[-2,-1,1.5,2.5,4][Math.floor(Math.random()*5)];marketState.moneyDelta=delta;events.push(`Стоимость денег изменилась на ${delta>0?'+':''}${delta}% годовых.`)}if(changes.includes('demand')){const delta=[-1,1][Math.floor(Math.random()*2)];marketState.demandDelta=delta;events.push(delta>0?`В точке ${hot} вырос спрос, сценарии с этой точкой стали лучше.`:`В точке ${weak} снизился спрос, риск простоя вырос.`)}document.getElementById('eventLines').innerHTML=events.slice(0,4).map(e=>`<div class="eventLine">${e}</div>`).join('');renderHeat();renderScenarios();}
+function bindOrder(){['fromCity','toCity','boxType','ownAvailability','companyMode','threshold','revenueRange','waitRange','storageRange','moneyRange'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{selectedScenarioIndex=0;renderScenarios()}));document.getElementById('simulateMarket').onclick=simulateMarket;}
+function bindTabs(){document.getElementById('tabSituation').onclick=()=>{document.getElementById('pageSituation').classList.add('active');document.getElementById('pageOrder').classList.remove('active');document.getElementById('tabSituation').className='primary';document.getElementById('tabOrder').className='';setTimeout(()=>situationMap.invalidateSize(),80)};document.getElementById('tabOrder').onclick=()=>{document.getElementById('pageOrder').classList.add('active');document.getElementById('pageSituation').classList.remove('active');document.getElementById('tabOrder').className='primary';document.getElementById('tabSituation').className='';setTimeout(()=>orderMap.invalidateSize(),80)}}
+function boot(){initSituationMap();bindSituation();renderDashboardCards();startCalcCounter();updateLocationCard();updateRouteList();populateOrderSelects();initOrderMap();bindOrder();bindTabs();renderScenarios();}
+window.addEventListener('load',boot);
+</script>
+</body>
+</html>
